@@ -43,43 +43,57 @@ export function split(total, weights) {
   return portions.map(({ value }) => value);
 }
 
-export function createState(startingAmounts = STARTER_NAMES.map(() => 0)) {
-  const weights = split(UNITS, startingAmounts);
+export function createState(prices = STARTER_NAMES.map(() => 0)) {
+  const weights = split(UNITS, STARTER_NAMES.map(() => 1));
   return {
-    version: 1,
+    version: 2,
     currentLabel: "Current reference",
     targetLabel: "Target reference",
     targetBudget: null,
+    targetTracksHoldings: true,
     holdings: STARTER_NAMES.map((name, index) => ({
-      id: "asset-" + index, name, current: startingAmounts[index], weight: weights[index],
+      id: "asset-" + index, name, price: prices[index], current: 0, weight: weights[index],
     })),
   };
 }
 
 export function readSeed(hash) {
   if (!hash.startsWith("#start=")) return null;
-  const amounts = hash.slice(7).split(",").map(parseMoney);
-  if (amounts.length !== STARTER_NAMES.length || !amounts.every(validAmount) || sum(amounts) > MAX_CENTS) return null;
-  return amounts;
+  const prices = hash.slice(7).split(",").map(parseMoney);
+  if (prices.length !== STARTER_NAMES.length || !prices.every(validAmount)) return null;
+  return prices;
 }
 
 export function readState(raw) {
   if (!raw) return null;
   const state = JSON.parse(raw);
   const validLabel = (value, length) => typeof value === "string" && value.trim().length > 0 && value.length <= length;
-  if (state?.version !== 1 || !validLabel(state.currentLabel, 32) || !validLabel(state.targetLabel, 32)
+  if (![1, 2].includes(state?.version) || !validLabel(state.currentLabel, 32) || !validLabel(state.targetLabel, 32)
       || !(state.targetBudget === null || validAmount(state.targetBudget))
       || !Array.isArray(state.holdings) || state.holdings.length > MAX_HOLDINGS) return null;
+  const legacy = state.version === 1;
+  if (!legacy && typeof state.targetTracksHoldings !== "boolean") return null;
   const ids = new Set();
   for (const holding of state.holdings) {
     if (!holding || !validLabel(holding.id, 60) || ids.has(holding.id) || !validLabel(holding.name, 28)
-        || !validAmount(holding.current) || !Number.isSafeInteger(holding.weight)
+        || !validAmount(holding.current) || (!legacy && !validAmount(holding.price))
+        || !Number.isSafeInteger(holding.weight)
         || holding.weight < 0 || holding.weight > UNITS) return null;
     ids.add(holding.id);
   }
   if (sum(state.holdings.map(({ current }) => current)) > MAX_CENTS
       || sum(state.holdings.map(({ weight }) => weight)) !== (state.holdings.length ? UNITS : 0)) return null;
-  return state;
+  if (!legacy) return state;
+
+  const priceWeights = split(UNITS, state.holdings.map(({ current }) => current));
+  const equalWeights = split(UNITS, state.holdings.map(() => 1));
+  const hasWeights = (weights) => state.holdings.every(({ weight }, index) => weight === weights[index]);
+  return {
+    ...state,
+    version: 2,
+    targetTracksHoldings: hasWeights(priceWeights) || hasWeights(equalWeights),
+    holdings: state.holdings.map((holding) => ({ ...holding, price: holding.current, current: 0 })),
+  };
 }
 
 export function totals(state) {
@@ -89,18 +103,22 @@ export function totals(state) {
 
 export function calculate(state) {
   const { current, target } = totals(state);
-  const targetValues = split(target, state.holdings.map((holding) => holding.weight));
+  const hasTargetMix = state.holdings.length > 0 && (!state.targetTracksHoldings || current > 0 || target > 0);
+  const weights = state.targetTracksHoldings
+    ? split(UNITS, state.holdings.map((holding) => holding.current))
+    : state.holdings.map((holding) => holding.weight);
+  const targetValues = split(target, weights);
   const rows = state.holdings.map((holding, index) => ({
     ...holding,
     currentShare: current ? holding.current / current : 0,
-    targetShare: holding.weight / UNITS,
+    targetShare: hasTargetMix ? weights[index] / UNITS : 0,
     target: targetValues[index],
     gap: targetValues[index] - holding.current,
   }));
   const drift = current > 0 && rows.length
     ? rows.reduce((distance, row) => distance + Math.abs(row.currentShare - row.targetShare), 0) / 2
     : null;
-  return { current, target, rows, drift };
+  return { current, target, rows, drift, hasTargetMix };
 }
 
 export function setCurrentTotal(state, amount) {
@@ -111,9 +129,11 @@ export function setCurrentTotal(state, amount) {
 export function matchCurrent(state) {
   const weights = split(UNITS, state.holdings.map((holding) => holding.current));
   state.holdings.forEach((holding, index) => { holding.weight = weights[index]; });
+  state.targetTracksHoldings = false;
 }
 
 export function setTargetWeight(state, id, weight) {
+  if (state.targetTracksHoldings) matchCurrent(state);
   const holding = state.holdings.find((row) => row.id === id);
   const others = state.holdings.filter((row) => row.id !== id);
   const weights = split(UNITS - weight, others.map((row) => row.weight));
@@ -122,6 +142,7 @@ export function setTargetWeight(state, id, weight) {
 }
 
 export function setTargetAmount(state, id, amount) {
+  if (state.targetTracksHoldings) matchCurrent(state);
   const view = calculate(state);
   const others = view.rows.filter((row) => row.id !== id);
   const remainder = split(view.target - amount, others.map((row) => row.weight));

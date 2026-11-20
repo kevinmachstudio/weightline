@@ -5,7 +5,8 @@ import {
 } from "./model.mjs";
 
 const $ = (id) => document.getElementById(id);
-const key = "weightline.portfolio.v1";
+const key = "weightline.portfolio.v2";
+const legacyKey = "weightline.portfolio.v1";
 const moneyWhole = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 0,
 });
@@ -57,16 +58,18 @@ function showSavedState(saved) {
 function loadState() {
   try {
     const stored = readState(localStorage.getItem(key));
-    if (stored) return stored;
+    if (stored) return { state: stored, migrated: false };
+    const legacy = readState(localStorage.getItem(legacyKey));
+    if (legacy) return { state: legacy, migrated: true };
   } catch {
     showSavedState(false);
   }
   return null;
 }
 
-const storedState = loadState();
-let hasPortfolio = Boolean(storedState);
-let state = storedState ?? createState();
+const stored = loadState();
+let hasPortfolio = Boolean(stored);
+let state = stored?.state ?? createState();
 let view = calculate(state);
 
 function persist() {
@@ -171,7 +174,8 @@ function refreshChart() {
     dot.setAttribute("aria-hidden", "true");
     name.className = "legend-name";
     name.textContent = row.name;
-    value.textContent = !target && !view.current ? "—" : formatWeight(target ? row.targetShare : row.currentShare);
+    const hasMix = target ? view.hasTargetMix : view.current > 0;
+    value.textContent = hasMix ? formatWeight(target ? row.targetShare : row.currentShare) : "—";
     item.append(dot, name, value);
     legend.append(item);
   });
@@ -211,15 +215,18 @@ function refreshTable() {
     mark.style.color = ink;
     node.querySelector(".asset-name").textContent = row.name;
     node.querySelector(".holding-name").setAttribute("aria-label", "Edit " + row.name);
+    const priceInput = node.querySelector('[data-key="price"]');
     const currentInput = node.querySelector('[data-key="current"]');
     const targetInput = node.querySelector('[data-key="target"]');
     const weightInput = node.querySelector('[data-key="weight"]');
     for (const [input, label] of [
-      [currentInput, "Current amount"], [targetInput, "Target amount"], [weightInput, "Target percentage"],
+      [priceInput, "Price"], [currentInput, "Holdings ($)"],
+      [targetInput, "Target amount"], [weightInput, "Target percentage"],
     ]) input.setAttribute("aria-label", label + " for " + row.name);
+    renderCell(priceInput, formatMoney(row.price));
     renderCell(currentInput, formatMoney(row.current));
     renderCell(targetInput, formatMoney(row.target));
-    renderCell(weightInput, formatWeight(row.targetShare));
+    renderCell(weightInput, view.hasTargetMix ? formatWeight(row.targetShare) : "—");
     node.querySelector(".current-weight").textContent = view.current ? formatWeight(row.currentShare) : "—";
     setGap(node.querySelector(".gap"), row.gap);
   });
@@ -230,7 +237,7 @@ function refreshTable() {
   $("sum-current").textContent = formatMoney(view.current);
   $("sum-current-percent").textContent = view.current ? "100.00%" : "—";
   $("sum-target").textContent = formatMoney(sum(view.rows.map(({ target }) => target)));
-  $("sum-target-percent").textContent = hasRows ? "100.00%" : "—";
+  $("sum-target-percent").textContent = view.hasTargetMix ? "100.00%" : "—";
   setGap($("sum-gap"), view.target - view.current);
   $("match").disabled = !view.current;
   $("add").disabled = view.rows.length >= MAX_HOLDINGS;
@@ -245,7 +252,7 @@ function refresh() {
   $("current-detail").textContent = view.rows.length + (view.rows.length === 1 ? " holding" : " holdings");
   $("target-detail").textContent = state.targetBudget === null ? "Follows current total" : "Fixed target budget";
   $("drift-total").textContent = view.drift === null ? "—" : percent.format(view.drift);
-  $("drift-detail").textContent = view.drift === null ? "Add a current balance to compare" : "Share of portfolio to reallocate";
+  $("drift-detail").textContent = view.drift === null ? "Enter holdings amounts to compare" : "Share of portfolio to reallocate";
   refreshTable();
   refreshChart();
 }
@@ -274,6 +281,7 @@ function updateCell(input) {
   }
 
   const values = totals(state);
+  if (field === "price") row.price = amount;
   if (field === "current") {
     if (values.current - row.current + amount > MAX_CENTS) {
       reportInputError(input, "The current portfolio total exceeds " + formatMoney(MAX_CENTS) + ".");
@@ -364,7 +372,8 @@ function openEditor(mode, id) {
     const row = state.holdings.find((holding) => holding.id === id);
     $("editor-title").textContent = mode === "add" ? "Add holding" : "Edit holding";
     field("Holding name", "name", row?.name ?? "", { limit: 28 });
-    field("Current amount", "amount", formatMoney(row?.current ?? 0), { money: true });
+    field("Price", "price", formatMoney(row?.price ?? 0), { money: true });
+    field("Holdings ($)", "amount", formatMoney(row?.current ?? 0), { money: true });
   } else {
     const isCurrent = mode === "current";
     $("editor-title").textContent = isCurrent ? "Edit current reference" : "Edit target reference";
@@ -372,7 +381,7 @@ function openEditor(mode, id) {
     const amount = field("Portfolio total", "amount", formatMoney(view[mode]), { money: true });
     if (isCurrent) {
       amount.disabled = !view.rows.length;
-      fieldInfo("Changing the total scales the current holdings in proportion to their balances. Enter an amount in a holding to change its share.");
+      fieldInfo("Changing the total scales the holdings amounts in proportion to their current values.");
     } else {
       const preference = document.createElement("label");
       preference.className = "check-label";
@@ -415,15 +424,18 @@ $("editor-form").addEventListener("submit", (event) => {
     state.targetBudget = data.has("follow") ? null : amount;
   } else {
     const existing = state.holdings.find((row) => row.id === id);
+    const price = parseMoney(data.get("price"));
+    if (price === null) return formError(moneyError);
     if (view.current - (existing?.current ?? 0) + amount > MAX_CENTS) {
       return formError("The current portfolio total exceeds " + formatMoney(MAX_CENTS) + ".");
     }
     if (existing) {
       existing.name = name;
+      existing.price = price;
       existing.current = amount;
     } else {
       if (state.holdings.length >= MAX_HOLDINGS) return formError("The portfolio can hold up to " + MAX_HOLDINGS + " entries.");
-      state.holdings.push({ id: crypto.randomUUID(), name, current: amount, weight: state.holdings.length ? 0 : UNITS });
+      state.holdings.push({ id: crypto.randomUUID(), name, price, current: amount, weight: state.holdings.length ? 0 : UNITS });
     }
   }
   editor.close();
@@ -478,5 +490,6 @@ window.addEventListener("storage", (event) => {
 });
 new ResizeObserver(draw).observe(canvas);
 window.addEventListener("hashchange", applySetup);
+if (stored?.migrated) persist();
 refresh();
 applySetup();

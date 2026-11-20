@@ -151,7 +151,7 @@ dialog::backdrop { background: #1e194a66; backdrop-filter: blur(4px); }
   .legend { padding-right: 22px; }
   .amount-input { width: 106px; }
 }
-@media (max-width: 630px) {
+@media (max-width: 750px) {
   .shell { width: calc(100% - 28px); }
   .top-inner { height: 58px; }
   .save-status { font-size: .8125rem; }
@@ -179,11 +179,12 @@ dialog::backdrop { background: #1e194a66; backdrop-filter: blur(4px); }
   thead { position: absolute; height: 1px; width: 1px; clip-path: inset(50%); overflow: hidden; white-space: nowrap; }
   tbody tr, tfoot tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px; padding: 11px 15px; }
   tbody tr:first-child { border-top: 1px solid var(--line); }
-  tbody tr > :first-child { grid-column: 1 / -1; }
-  tbody tr > :nth-child(2) { grid-column: 1; grid-row: 2; }
-  tbody tr > :nth-child(3) { grid-column: 1; grid-row: 3; }
-  tbody tr > :nth-child(4) { grid-column: 2; grid-row: 2; }
-  tbody tr > :nth-child(5) { grid-column: 2; grid-row: 3; }
+  tbody tr > :first-child { grid-column: 1; grid-row: 1; }
+  tbody tr > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  tbody tr > :nth-child(3) { grid-column: 1; grid-row: 2; }
+  tbody tr > :nth-child(4) { grid-column: 1; grid-row: 3; }
+  tbody tr > :nth-child(5) { grid-column: 2; grid-row: 2; }
+  tbody tr > :nth-child(6) { grid-column: 2; grid-row: 3; }
   tbody tr > :last-child { grid-column: 1 / -1; }
   table tr > :is(th, td) { display: flex; padding: 0 !important; min-width: 0; height: auto; align-items: center; text-align: left; white-space: normal; gap: 6px; }
   tbody td { flex-wrap: wrap; }
@@ -194,9 +195,11 @@ dialog::backdrop { background: #1e194a66; backdrop-filter: blur(4px); }
   tfoot tr { background: #f8f8fd; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
   tfoot tr > :is(th, td) { border: 0; grid-column: auto; }
   tfoot tr > :first-child { grid-column: 1 / -1; }
+  #sum-price { display: none; }
   tfoot td { flex-wrap: wrap; }
   tfoot td::before { font-size: .8125rem; color: var(--muted); font-weight: 500; }
-  #sum-current::before, #sum-current-percent::before { content: "Current"; }
+  #sum-current::before { content: "Holdings"; }
+  #sum-current-percent::before { content: "Current"; }
   #sum-target::before, #sum-target-percent::before { content: "Target"; }
   #sum-gap::before { content: "Net change"; }
   #sum-current-percent { grid-column: 1; grid-row: 3; }
