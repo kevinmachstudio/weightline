@@ -1,12 +1,11 @@
 import {
-  UNITS, MAX_HOLDINGS, MAX_CENTS, calculate, createState, matchCurrent, parseMoney,
-  parsePercent, readSeed, readState, removeHolding, setCurrentTotal, setTargetAmount,
-  setTargetWeight, sum, totals,
+  MAX_HOLDINGS, MAX_CENTS, calculate, createState, overLimit, parseMoney,
+  parseReturn, readSeed, readState, resizeHoldings,
 } from "./model.mjs";
 
 const $ = (id) => document.getElementById(id);
-const key = "weightline.portfolio.v2";
-const legacyKey = "weightline.portfolio.v1";
+const key = "weightline.portfolio.v3";
+const legacyKeys = ["weightline.portfolio.v2", "weightline.portfolio.v1"];
 const moneyWhole = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 0,
 });
@@ -18,6 +17,9 @@ const compact = new Intl.NumberFormat("en-US", {
 });
 const percent = new Intl.NumberFormat("en-US", {
   style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+const signedPercent = new Intl.NumberFormat("en-US", {
+  style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 2,
 });
 const palettes = [
   ["#7465ee", "#eeebff", "#4d3ab8"],
@@ -38,9 +40,7 @@ const formatWeight = (share) => {
   return percent.format(share);
 };
 const moneyError = "Enter a dollar amount from $0 to " + formatMoney(MAX_CENTS) + ".";
-const formatGap = (change) => change > 0
-  ? "+" + formatMoney(change)
-  : change < 0 ? "−" + formatMoney(-change) : "—";
+const returnError = "Enter a gain or loss of at least −100%, with up to two decimal places.";
 const canvas = $("mix-canvas");
 const editor = $("editor");
 const editorFields = $("editor-fields");
@@ -57,10 +57,10 @@ function showSavedState(saved) {
 
 function loadState() {
   try {
-    const stored = readState(localStorage.getItem(key));
-    if (stored) return { state: stored, migrated: false };
-    const legacy = readState(localStorage.getItem(legacyKey));
-    if (legacy) return { state: legacy, migrated: true };
+    for (const storageKey of [key, ...legacyKeys]) {
+      const stored = readState(localStorage.getItem(storageKey));
+      if (stored) return { state: stored, migrated: storageKey !== key };
+    }
   } catch {
     showSavedState(false);
   }
@@ -100,11 +100,6 @@ function notify(message) {
   toastTimeout = setTimeout(() => { toast.hidden = true; }, 3400);
 }
 
-function setGap(node, gap) {
-  node.textContent = formatGap(gap);
-  node.dataset.direction = gap > 0 ? "increase" : gap < 0 ? "decrease" : "none";
-}
-
 function draw() {
   const size = canvas.clientWidth;
   if (!size) return;
@@ -140,7 +135,7 @@ function draw() {
   ctx.stroke();
 
   const segments = view.rows.map((row, index) => ({
-    share: chartMode === "current" ? row.currentShare : row.targetShare,
+    share: chartMode === "current" ? row.currentShare : row.futureShare,
     color: palettes[index % palettes.length][0],
   })).filter(({ share }) => share > 0);
   let angle = -Math.PI / 2;
@@ -156,11 +151,11 @@ function draw() {
 }
 
 function refreshChart() {
-  const target = chartMode === "target";
-  const amount = target ? view.target : view.current;
-  $("show-current").setAttribute("aria-pressed", !target);
-  $("show-target").setAttribute("aria-pressed", target);
-  $("chart-label").textContent = target ? "Target mix" : "Current mix";
+  const future = chartMode === "future";
+  const amount = view[chartMode];
+  $("show-current").setAttribute("aria-pressed", !future);
+  $("show-future").setAttribute("aria-pressed", future);
+  $("chart-label").textContent = future ? "Future mix" : "Current mix";
   $("chart-value").textContent = amount >= 100_000_000 ? compact.format(amount / 100) : formatMoney(amount);
   const legend = $("legend");
   legend.replaceChildren();
@@ -174,8 +169,7 @@ function refreshChart() {
     dot.setAttribute("aria-hidden", "true");
     name.className = "legend-name";
     name.textContent = row.name;
-    const hasMix = target ? view.hasTargetMix : view.current > 0;
-    value.textContent = hasMix ? formatWeight(target ? row.targetShare : row.currentShare) : "—";
+    value.textContent = amount ? formatWeight(future ? row.futureShare : row.currentShare) : "—";
     item.append(dot, name, value);
     legend.append(item);
   });
@@ -193,7 +187,7 @@ function renderCell(input, value) {
   if (input !== document.activeElement) input.value = value;
 }
 
-function refreshTable() {
+function refreshTable(preview) {
   const body = $("rows");
   for (const [id, node] of rowNodes) {
     if (state.holdings.some((row) => row.id === id)) continue;
@@ -217,18 +211,21 @@ function refreshTable() {
     node.querySelector(".holding-name").setAttribute("aria-label", "Edit " + row.name);
     const priceInput = node.querySelector('[data-key="price"]');
     const currentInput = node.querySelector('[data-key="current"]');
-    const targetInput = node.querySelector('[data-key="target"]');
-    const weightInput = node.querySelector('[data-key="weight"]');
+    const returnInput = node.querySelector('[data-key="returnBps"]');
     for (const [input, label] of [
       [priceInput, "Price"], [currentInput, "Holdings ($)"],
-      [targetInput, "Target amount"], [weightInput, "Target percentage"],
+      [returnInput, "Gain or loss (%)"],
     ]) input.setAttribute("aria-label", label + " for " + row.name);
     renderCell(priceInput, formatMoney(row.price));
+    const futurePrice = node.querySelector(".future-price");
+    futurePrice.hidden = !row.price || !row.returnBps;
+    futurePrice.textContent = "Future " + formatMoney(row.futurePrice);
     renderCell(currentInput, formatMoney(row.current));
-    renderCell(targetInput, formatMoney(row.target));
-    renderCell(weightInput, view.hasTargetMix ? formatWeight(row.targetShare) : "—");
+    if (!preview || returnInput !== document.activeElement) renderCell(returnInput, signedPercent.format(row.returnBps / 10_000));
+    returnInput.dataset.direction = row.returnBps > 0 ? "gain" : row.returnBps < 0 ? "loss" : "flat";
     node.querySelector(".current-weight").textContent = view.current ? formatWeight(row.currentShare) : "—";
-    setGap(node.querySelector(".gap"), row.gap);
+    node.querySelector(".future-value").textContent = formatMoney(row.future);
+    node.querySelector(".future-weight").textContent = view.future ? formatWeight(row.futureShare) : "—";
   });
 
   const hasRows = view.rows.length > 0;
@@ -236,24 +233,18 @@ function refreshTable() {
   $("totals").hidden = !hasRows;
   $("sum-current").textContent = formatMoney(view.current);
   $("sum-current-percent").textContent = view.current ? "100.00%" : "—";
-  $("sum-target").textContent = formatMoney(sum(view.rows.map(({ target }) => target)));
-  $("sum-target-percent").textContent = view.hasTargetMix ? "100.00%" : "—";
-  setGap($("sum-gap"), view.target - view.current);
-  $("match").disabled = !view.current;
+  $("sum-future").textContent = formatMoney(view.future);
+  $("sum-future-percent").textContent = view.future ? "100.00%" : "—";
   $("add").disabled = view.rows.length >= MAX_HOLDINGS;
 }
 
-function refresh() {
-  view = calculate(state);
+function refresh(portfolio = state) {
+  view = calculate(portfolio);
   $("current-label").textContent = state.currentLabel;
-  $("target-label").textContent = state.targetLabel;
   $("current-total").textContent = formatMoney(view.current);
-  $("target-total").textContent = formatMoney(view.target);
+  $("future-total").textContent = formatMoney(view.future);
   $("current-detail").textContent = view.rows.length + (view.rows.length === 1 ? " holding" : " holdings");
-  $("target-detail").textContent = state.targetBudget === null ? "Follows current total" : "Fixed target budget";
-  $("drift-total").textContent = view.drift === null ? "—" : percent.format(view.drift);
-  $("drift-detail").textContent = view.drift === null ? "Enter holdings amounts to compare" : "Share of portfolio to reallocate";
-  refreshTable();
+  refreshTable(portfolio !== state);
   refreshChart();
 }
 
@@ -268,50 +259,39 @@ function reportInputError(input, message) {
   notify(message);
 }
 
-function updateCell(input) {
-  const { key: field } = input.dataset;
-  const id = input.closest("tr").dataset.id;
-  const row = state.holdings.find((holding) => holding.id === id);
-  const raw = input.value;
-  if (raw === input.dataset.display) return;
-  const amount = field === "weight" ? parsePercent(raw) : parseMoney(raw);
-  if (amount === null) {
-    reportInputError(input, field === "weight" ? "Enter a target between 0% and 100%, with up to two decimal places." : moneyError);
-    return;
-  }
-
-  const values = totals(state);
-  if (field === "price") row.price = amount;
-  if (field === "current") {
-    if (values.current - row.current + amount > MAX_CENTS) {
-      reportInputError(input, "The current portfolio total exceeds " + formatMoney(MAX_CENTS) + ".");
-      return;
-    }
-    row.current = amount;
-  }
-  if (field === "weight") {
-    if (state.holdings.length === 1 && amount !== UNITS) {
-      reportInputError(input, "A single holding represents 100% of the target.");
-      return;
-    }
-    setTargetWeight(state, id, amount);
-  }
-  if (field === "target") {
-    if (amount > values.target) {
-      reportInputError(input, "Increase the target reference total before assigning this amount.");
-      return;
-    }
-    if (state.holdings.length === 1 && amount !== values.target) {
-      reportInputError(input, "A single holding represents the entire target budget.");
-      return;
-    }
-    if (values.target > 0) setTargetAmount(state, id, amount);
-  }
-  save();
+function portfolioError(holdings) {
+  const limit = overLimit(holdings);
+  if (limit === "price") return "A future price exceeds " + formatMoney(MAX_CENTS) + ".";
+  return limit ? "The " + limit + " portfolio total exceeds " + formatMoney(MAX_CENTS) + "." : null;
 }
 
+function previewCell(input) {
+  const { key: field } = input.dataset;
+  const id = input.closest("tr").dataset.id;
+  const isReturn = field === "returnBps";
+  const value = isReturn ? parseReturn(input.value) : parseMoney(input.value);
+  if (value === null) return { error: isReturn ? returnError : moneyError };
+  const holdings = state.holdings.map((row) => row.id === id ? { ...row, [field]: value } : row);
+  return { holdings, error: portfolioError(holdings) };
+}
+
+$("rows").addEventListener("input", (event) => {
+  const input = event.target;
+  if (!input.matches('[data-key="returnBps"]')) return;
+  const { holdings, error } = previewCell(input);
+  refresh(error ? state : { ...state, holdings });
+});
 $("rows").addEventListener("change", (event) => {
-  if (event.target.matches("input")) updateCell(event.target);
+  const input = event.target;
+  if (!input.matches("input") || input.value === input.dataset.display) return;
+  const { holdings, error } = previewCell(input);
+  if (error) {
+    refresh();
+    reportInputError(input, error);
+    return;
+  }
+  state.holdings = holdings;
+  save();
 });
 $("rows").addEventListener("focusin", (event) => {
   if (event.target.matches("input")) {
@@ -332,6 +312,7 @@ $("rows").addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape") {
     event.target.value = event.target.dataset.display;
+    refresh();
     event.target.blur();
   }
 });
@@ -375,26 +356,11 @@ function openEditor(mode, id) {
     field("Price", "price", formatMoney(row?.price ?? 0), { money: true });
     field("Holdings ($)", "amount", formatMoney(row?.current ?? 0), { money: true });
   } else {
-    const isCurrent = mode === "current";
-    $("editor-title").textContent = isCurrent ? "Edit current reference" : "Edit target reference";
-    field("Reference name", "name", isCurrent ? state.currentLabel : state.targetLabel, { limit: 32 });
-    const amount = field("Portfolio total", "amount", formatMoney(view[mode]), { money: true });
-    if (isCurrent) {
-      amount.disabled = !view.rows.length;
-      fieldInfo("Changing the total scales the holdings amounts in proportion to their current values.");
-    } else {
-      const preference = document.createElement("label");
-      preference.className = "check-label";
-      const follow = document.createElement("input");
-      follow.type = "checkbox";
-      follow.name = "follow";
-      follow.checked = state.targetBudget === null;
-      amount.disabled = follow.checked;
-      follow.addEventListener("change", () => { amount.disabled = follow.checked; });
-      preference.append(follow, "Use the current portfolio total");
-      editorFields.append(preference);
-      fieldInfo("Changing the target budget updates target dollar amounts using your saved target percentages.");
-    }
+    $("editor-title").textContent = "Edit current reference";
+    field("Reference name", "name", state.currentLabel, { limit: 32 });
+    const amount = field("Portfolio total", "amount", formatMoney(view.current), { money: true });
+    amount.disabled = !view.rows.length;
+    fieldInfo("Changing the total scales the holdings amounts in proportion to their current values.");
   }
   editor.showModal();
   const name = editorFields.querySelector('[name="name"]');
@@ -416,28 +382,23 @@ $("editor-form").addEventListener("submit", (event) => {
   if (data.has("amount") && amount === null) return formError(moneyError);
 
   const { mode, id } = draft;
+  let holdings = state.holdings;
   if (mode === "current") {
-    state.currentLabel = name;
-    if (amount !== null && amount !== view.current) setCurrentTotal(state, amount);
-  } else if (mode === "target") {
-    state.targetLabel = name;
-    state.targetBudget = data.has("follow") ? null : amount;
+    if (amount !== null && amount !== view.current) holdings = resizeHoldings(holdings, amount);
   } else {
-    const existing = state.holdings.find((row) => row.id === id);
     const price = parseMoney(data.get("price"));
     if (price === null) return formError(moneyError);
-    if (view.current - (existing?.current ?? 0) + amount > MAX_CENTS) {
-      return formError("The current portfolio total exceeds " + formatMoney(MAX_CENTS) + ".");
-    }
-    if (existing) {
-      existing.name = name;
-      existing.price = price;
-      existing.current = amount;
+    if (mode === "holding") {
+      holdings = holdings.map((row) => row.id === id ? { ...row, name, price, current: amount } : row);
     } else {
-      if (state.holdings.length >= MAX_HOLDINGS) return formError("The portfolio can hold up to " + MAX_HOLDINGS + " entries.");
-      state.holdings.push({ id: crypto.randomUUID(), name, price, current: amount, weight: state.holdings.length ? 0 : UNITS });
+      if (holdings.length >= MAX_HOLDINGS) return formError("The portfolio can hold up to " + MAX_HOLDINGS + " entries.");
+      holdings = [...holdings, { id: crypto.randomUUID(), name, price, current: amount, returnBps: 0 }];
     }
   }
+  const error = portfolioError(holdings);
+  if (error) return formError(error);
+  if (mode === "current") state.currentLabel = name;
+  state.holdings = holdings;
   editor.close();
   save();
 });
@@ -448,7 +409,7 @@ $("remove").addEventListener("click", (event) => {
     event.currentTarget.textContent = "Confirm removal";
     return;
   }
-  removeHolding(state, draft.id);
+  state.holdings = state.holdings.filter((holding) => holding.id !== draft.id);
   editor.close();
   save();
   $("add").focus();
@@ -457,18 +418,12 @@ $("remove").addEventListener("click", (event) => {
 
 $("add").addEventListener("click", () => openEditor("add"));
 $("edit-current").addEventListener("click", () => openEditor("current"));
-$("edit-target").addEventListener("click", () => openEditor("target"));
 $("close").addEventListener("click", () => editor.close());
 $("cancel").addEventListener("click", () => editor.close());
 $("rows").addEventListener("click", (event) => {
   if (event.target.closest(".holding-name")) openEditor("holding", event.target.closest("tr").dataset.id);
 });
-$("match").addEventListener("click", () => {
-  matchCurrent(state);
-  save();
-  notify("Target percentages now match the current mix.");
-});
-for (const mode of ["current", "target"]) {
+for (const mode of ["current", "future"]) {
   $("show-" + mode).addEventListener("click", () => {
     chartMode = mode;
     refreshChart();

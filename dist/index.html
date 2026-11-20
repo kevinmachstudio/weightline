@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Track your portfolio weights and compare your current allocation with an editable target.">
+  <meta name="description" content="See how gains and losses could change your portfolio value and allocation.">
   <meta name="theme-color" content="#f3f5fb">
   <title>Weightline · Portfolio allocation</title>
   <link rel="icon" href="./mark.svg" type="image/svg+xml">
@@ -22,27 +22,22 @@
     <div class="intro">
       <div>
         <h1>Portfolio allocation<span>.</span></h1>
-        <p>Track what you hold and see what it takes to reach your target.</p>
+        <p>See how gains and losses change the value and mix of your portfolio.</p>
       </div>
       <button type="button" id="add" class="button primary"><span aria-hidden="true">＋</span> Add holding</button>
     </div>
 
-    <section class="summary" aria-label="Portfolio reference points">
+    <section class="summary" aria-label="Portfolio values">
       <article class="metric current-card">
         <div class="metric-header"><h2 id="current-label">Current reference</h2><button class="icon-button pencil" id="edit-current" type="button" aria-label="Edit current reference" title="Edit current reference"></button></div>
         <output class="metric-number" id="current-total">$0</output>
         <p id="current-detail">Total held</p>
         <div class="card-lines" aria-hidden="true"></div>
       </article>
-      <article class="metric target-card">
-        <div class="metric-header"><h2 id="target-label">Target reference</h2><button class="icon-button pencil" id="edit-target" type="button" aria-label="Edit target reference" title="Edit target reference"></button></div>
-        <output class="metric-number" id="target-total">$0</output>
-        <p id="target-detail">Follows current total</p>
-      </article>
-      <article class="metric">
-        <div class="metric-header"><h2>Allocation drift</h2><span class="drift-mark" aria-hidden="true">≋</span></div>
-        <output class="metric-number" id="drift-total">0.00%</output>
-        <p id="drift-detail">Share to shift between holdings</p>
+      <article class="metric future-card">
+        <div class="metric-header"><h2>Future portfolio value</h2></div>
+        <output class="metric-number" id="future-total">$0</output>
+        <p>Sum of your future holdings</p>
       </article>
     </section>
 
@@ -52,7 +47,7 @@
           <h2 id="mix-heading">Allocation mix</h2>
           <div class="switch" aria-label="Chart reference">
             <button type="button" id="show-current" aria-pressed="true">Current</button>
-            <button type="button" id="show-target" aria-pressed="false">Target</button>
+            <button type="button" id="show-future" aria-pressed="false">Future</button>
           </div>
         </div>
         <div class="chart">
@@ -66,9 +61,8 @@
         <div class="panel-heading">
           <div>
             <h2 id="holdings-heading">Holdings</h2>
-            <p>Enter the dollar value you hold for each asset.</p>
+            <p>Enter your holdings in dollars and a gain or loss such as +10% or −5%.</p>
           </div>
-          <button type="button" id="match" class="button secondary">Match current mix</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -77,9 +71,9 @@
               <th scope="col">Price</th>
               <th scope="col">Holdings ($)</th>
               <th scope="col">Current %</th>
-              <th scope="col">Target amount</th>
-              <th scope="col">Target %</th>
-              <th scope="col">To target</th>
+              <th scope="col">Gain / loss %</th>
+              <th scope="col">Future holdings</th>
+              <th scope="col">Future %</th>
             </tr></thead>
             <tbody id="rows"></tbody>
             <tfoot id="totals"><tr>
@@ -87,14 +81,13 @@
               <td id="sum-price"></td>
               <td id="sum-current"></td>
               <td id="sum-current-percent"></td>
-              <td id="sum-target"></td>
-              <td id="sum-target-percent"></td>
-              <td id="sum-gap"></td>
+              <td id="sum-return"></td>
+              <td id="sum-future"></td>
+              <td id="sum-future-percent"></td>
             </tr></tfoot>
           </table>
         </div>
         <div id="empty" class="empty" hidden><p>Add a holding to start tracking your allocation.</p></div>
-        <p class="table-note">Edits to a target redistribute the remaining allocation across the other holdings.</p>
       </section>
     </div>
 
@@ -115,12 +108,12 @@
   <template id="row-template">
     <tr>
       <th scope="row" data-label="Holding"><button type="button" class="holding-name"><span class="asset-mark" aria-hidden="true"></span><span class="asset-name"></span></button></th>
-      <td data-label="Price"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="price"></label></td>
+      <td class="price-cell" data-label="Price"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="price"></label><span class="future-price" hidden></span></td>
       <td data-label="Holdings ($)"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="current"></label></td>
       <td class="current-weight" data-label="Current %"></td>
-      <td data-label="Target amount"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="target"></label></td>
-      <td data-label="Target %"><label class="cell-input percent-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="weight"></label></td>
-      <td class="gap" data-label="To target"></td>
+      <td class="return-cell" data-label="Gain / loss %"><label class="cell-input percent-input"><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-key="returnBps"></label></td>
+      <td class="future-value" data-label="Future holdings"></td>
+      <td class="future-weight" data-label="Future %"></td>
     </tr>
   </template>
 </body>
