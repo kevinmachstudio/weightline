@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Track your portfolio weights and compare your current allocation with an editable target.">
+  <meta name="theme-color" content="#f3f5fb">
+  <title>Weightline · Portfolio allocation</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="shell top-inner">
+      <a class="wordmark" href="./" aria-label="Weightline home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>weightline<span class="wordmark-period">.</span></a>
+      <div class="save-status" id="save-status" role="status">Edits saved in this browser</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="intro">
+      <div>
+        <h1>Portfolio allocation<span>.</span></h1>
+        <p>Track what you hold and see what it takes to reach your target.</p>
+      </div>
+      <button type="button" id="add" class="button primary"><span aria-hidden="true">＋</span> Add holding</button>
+    </div>
+
+    <section class="summary" aria-label="Portfolio reference points">
+      <article class="metric current-card">
+        <div class="metric-header"><h2 id="current-label">Current reference</h2><button class="icon-button pencil" id="edit-current" type="button" aria-label="Edit current reference" title="Edit current reference"></button></div>
+        <output class="metric-number" id="current-total">$0</output>
+        <p id="current-detail">Total held</p>
+        <div class="card-lines" aria-hidden="true"></div>
+      </article>
+      <article class="metric target-card">
+        <div class="metric-header"><h2 id="target-label">Target reference</h2><button class="icon-button pencil" id="edit-target" type="button" aria-label="Edit target reference" title="Edit target reference"></button></div>
+        <output class="metric-number" id="target-total">$0</output>
+        <p id="target-detail">Follows current total</p>
+      </article>
+      <article class="metric">
+        <div class="metric-header"><h2>Allocation drift</h2><span class="drift-mark" aria-hidden="true">≋</span></div>
+        <output class="metric-number" id="drift-total">0.00%</output>
+        <p id="drift-detail">Share to shift between holdings</p>
+      </article>
+    </section>
+
+    <div class="workspace">
+      <section class="panel mix" aria-labelledby="mix-heading">
+        <div class="panel-heading">
+          <h2 id="mix-heading">Allocation mix</h2>
+          <div class="switch" aria-label="Chart reference">
+            <button type="button" id="show-current" aria-pressed="true">Current</button>
+            <button type="button" id="show-target" aria-pressed="false">Target</button>
+          </div>
+        </div>
+        <div class="chart">
+          <canvas id="mix-canvas" width="280" height="280" aria-hidden="true"></canvas>
+          <div class="chart-center"><span id="chart-label">Current mix</span><strong id="chart-value">$0</strong></div>
+        </div>
+        <ul class="legend" id="legend" aria-label="Chart allocation by holding"></ul>
+      </section>
+
+      <section class="panel holdings" aria-labelledby="holdings-heading">
+        <div class="panel-heading">
+          <div>
+            <h2 id="holdings-heading">Holdings</h2>
+            <p>Edit amounts or target weights directly.</p>
+          </div>
+          <button type="button" id="match" class="button secondary">Match current mix</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th scope="col">Holding</th>
+              <th scope="col">Current amount</th>
+              <th scope="col">Current %</th>
+              <th scope="col">Target amount</th>
+              <th scope="col">Target %</th>
+              <th scope="col">To target</th>
+            </tr></thead>
+            <tbody id="rows"></tbody>
+            <tfoot id="totals"><tr>
+              <th scope="row">Total</th>
+              <td id="sum-current"></td>
+              <td id="sum-current-percent"></td>
+              <td id="sum-target"></td>
+              <td id="sum-target-percent"></td>
+              <td id="sum-gap"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div id="empty" class="empty" hidden><p>Add a holding to start tracking your allocation.</p></div>
+        <p class="table-note">Edits to a target redistribute the remaining allocation across the other holdings.</p>
+      </section>
+    </div>
+
+    <footer>Balances in USD</footer>
+  </main>
+
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="editor-form">
+      <div class="dialog-heading"><h2 id="editor-title"></h2><button type="button" id="close" class="icon-button close" aria-label="Close">×</button></div>
+      <div class="fields" id="editor-fields"></div>
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="button danger" id="remove" hidden>Remove holding</button><button type="button" class="button secondary" id="cancel">Cancel</button><button type="submit" class="button primary" id="submit">Save changes</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <template id="row-template">
+    <tr>
+      <th scope="row" data-label="Holding"><button type="button" class="holding-name"><span class="asset-mark" aria-hidden="true"></span><span class="asset-name"></span></button></th>
+      <td data-label="Current amount"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="current"></label></td>
+      <td class="current-weight" data-label="Current %"></td>
+      <td data-label="Target amount"><label class="cell-input amount-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="target"></label></td>
+      <td data-label="Target %"><label class="cell-input percent-input"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-key="weight"></label></td>
+      <td class="gap" data-label="To target"></td>
+    </tr>
+  </template>
+</body>
+</html>
