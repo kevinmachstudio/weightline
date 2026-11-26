@@ -11,7 +11,7 @@ Amounts are in USD. Data is stored on the device in the app or browser. A setup 
 ## Install on a phone
 
 - On iPhone or iPad, use Safari’s Share menu, choose **Add to Home Screen**, and enable **Open as Web App** if shown.
-- On Android, use **Install app** in Weightline or Chrome’s **Add to Home screen** menu.
+- On Android, use **Install app** in Weightline or **Install and create shortcut** in Chrome’s menu.
 - Open the installed app once while online to prepare it for offline use. **Portfolio backup** lets you download your saved portfolio and restore it in the installed app if it has separate storage.
 
 ## Run locally
