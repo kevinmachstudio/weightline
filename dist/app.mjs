@@ -51,7 +51,7 @@ let toastTimeout;
 
 function showSavedState(saved) {
   const status = $("save-status");
-  status.textContent = saved ? "Saved in this browser" : "Browser storage unavailable";
+  status.textContent = saved ? "Saved on this device" : "Device storage unavailable";
   status.toggleAttribute("data-error", !saved);
 }
 
@@ -77,8 +77,10 @@ function persist() {
   try {
     localStorage.setItem(key, JSON.stringify(state));
     showSavedState(true);
+    return true;
   } catch {
     showSavedState(false);
+    return false;
   }
 }
 
@@ -249,9 +251,72 @@ function refresh(portfolio = state) {
 }
 
 function save() {
-  persist();
+  const saved = persist();
   refresh();
+  return saved;
 }
+
+const backupDialog = $("backup");
+const backupFile = $("backup-file");
+const backupStatus = $("backup-status");
+const restoreButton = $("restore-backup");
+let selectedBackup = null;
+
+function showBackupSelection(portfolio, message) {
+  selectedBackup = portfolio;
+  restoreButton.disabled = !portfolio;
+  restoreButton.textContent = portfolio && hasPortfolio ? "Replace portfolio" : "Restore portfolio";
+  backupStatus.textContent = message;
+  backupStatus.hidden = !message;
+}
+
+$("open-backup").addEventListener("click", () => {
+  backupFile.value = "";
+  showBackupSelection(null, "");
+  backupDialog.showModal();
+});
+
+$("download-backup").addEventListener("click", () => {
+  const file = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "weightline-portfolio.json";
+  backupDialog.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+});
+
+backupFile.addEventListener("change", async () => {
+  showBackupSelection(null, "");
+  const file = backupFile.files[0];
+  if (!file) return;
+  let portfolio;
+  try {
+    portfolio = readState(await file.text());
+  } catch {
+    // Report a backup file that the browser cannot read.
+  }
+  if (file !== backupFile.files[0]) return;
+  if (!portfolio) {
+    showBackupSelection(null, "Choose a valid Weightline backup file.");
+    return;
+  }
+  const count = portfolio.holdings.length;
+  const holdings = count + (count === 1 ? " holding" : " holdings");
+  showBackupSelection(portfolio, hasPortfolio
+    ? "This backup will replace the portfolio on this device with " + holdings + "."
+    : "Ready to restore " + holdings + ".");
+});
+
+restoreButton.addEventListener("click", () => {
+  if (!selectedBackup) return;
+  state = selectedBackup;
+  const saved = save();
+  backupDialog.close();
+  notify(saved ? "Portfolio restored." : "Portfolio opened. Device storage is unavailable.");
+});
 
 function reportInputError(input, message) {
   input.setAttribute("aria-invalid", "true");

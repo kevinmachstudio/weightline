@@ -1,0 +1,14 @@
+{
+  "name": "Weightline",
+  "short_name": "Weightline",
+  "description": "Track your holdings and explore how gains and losses change your portfolio.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5fb",
+  "theme_color": "#fcfcff",
+  "icons": [
+    { "src": "./icons/weightline-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/weightline-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

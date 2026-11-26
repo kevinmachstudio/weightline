@@ -113,7 +113,10 @@ tbody td, tbody th { height: 49px; }
 tfoot :is(th, td) { padding-block: 13px; font-weight: 720; background: #f8f8fd; border-block: 1px solid #edecf6; }
 .holdings:has(tfoot:not([hidden])) { padding-bottom: 12px; }
 .empty { padding: 19px 21px; color: var(--muted); }
-footer { display: flex; flex-wrap: wrap; gap: 5px 18px; justify-content: space-between; font-size: .8125rem; color: var(--muted); padding-block: 19px 28px; }
+footer { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 18px; font-size: .8125rem; color: var(--muted); padding-block: 12px 22px; }
+.footer-action { margin-left: auto; min-height: 44px; border: 0; padding: 4px 0; background: transparent; color: var(--accent-dark); font-weight: 650; }
+.footer-action:hover { text-decoration: underline; }
+#install-app { min-height: 44px; }
 
 dialog { width: min(460px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 21px; padding: 23px; background: var(--surface); color: var(--ink); box-shadow: 0 18px 88px #211a6055; }
 dialog::backdrop { background: #1e194a66; backdrop-filter: blur(4px); }
@@ -189,7 +192,7 @@ dialog::backdrop { background: #1e194a66; backdrop-filter: blur(4px); }
   .future-value::before { width: 100%; }
   .future-value { align-content: start; }
   .cell-input { width: 100%; }
-  .cell-input input { text-align: left; padding: 8px; }
+  .cell-input input { text-align: left; padding: 8px; font-size: 1rem; }
   tfoot tr { background: #f8f8fd; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
   tfoot tr > :is(th, td) { border: 0; grid-column: auto; }
   tfoot tr > :first-child { grid-column: 1 / -1; }

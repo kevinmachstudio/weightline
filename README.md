@@ -6,7 +6,13 @@ Weightline compares a portfolio's current values and allocation with a hypotheti
 - Enter a signed percentage in **Gain / loss %**. Zero leaves the position at its current value and −100% reduces its future value to zero.
 - **Future holdings** multiplies each position by one plus its gain or loss, rounded to cents. **Future %** divides each projected holding by the sum of those future holdings. The allocation chart can show either the current or the future mix.
 
-Amounts are in USD. Data is stored in the current browser profile and site origin. A setup link with a `#start=` fragment can initialize the seven starter prices on a fresh browser. The fragment contains comma-separated prices, stays in the browser, and is removed from the address bar when the app opens. Saved prices and holdings carry over from previous versions.
+Amounts are in USD. Data is stored on the device in the app or browser. A setup link with a `#start=` fragment can initialize the seven starter prices on a fresh browser. The fragment contains comma-separated prices, stays in the browser, and is removed from the address bar when the app opens. Saved prices and holdings carry over from previous versions.
+
+## Install on a phone
+
+- On iPhone or iPad, use Safari’s Share menu, choose **Add to Home Screen**, and enable **Open as Web App** if shown.
+- On Android, use **Install app** in Weightline or Chrome’s **Add to Home screen** menu.
+- Open the installed app once while online to prepare it for offline use. **Portfolio backup** lets you download your saved portfolio and restore it in the installed app if it has separate storage.
 
 ## Run locally
 
